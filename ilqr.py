@@ -49,7 +49,7 @@ def forward_pass(env, start_state, controls):
 
     return (cost, states)
 
-def backward_pass():
+def backward_pass(lamb, states, controls, V, V_x, V_xx):
     """
     Run the iLQR backward pass, using perfect information about dynamics and
     cost derivatives.
@@ -64,7 +64,15 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=2, ma
     lamb = 1.0
     cost = -float('inf')
     controls = np.zeros((num_controls,))
+    V = np.zeros_like(controls)
+    V_x = np.zeros((num_controls, 2, 1))
+    V_xx = np.zeros((num_controls, 2, 2))
+
+    # TODO : Initialize V_x and V_xx
+
     env = gym.make('Pendulum-v0')
+
+    states = forward_pass(env, start_state, controls)
 
     for i in range(max_iter):
         print("\nOn iteration {}".format(i))
@@ -72,9 +80,13 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=2, ma
         print("\tControls are currently {}".format(controls))
         print("\tLambda is currently {}".format(lamb))
 
+        new_controls = backward_pass(lamb, states, controls, V, V_x, V_xx)
+
         # Snippet that implements the Levenberg-Marquardt heuristic
-        new_cost, states = forward_pass(env, start_state, controls)
+        new_cost, states = forward_pass(env, start_state, new_controls)
         if new_cost < cost:
+          controls = new_controls
+          cost = new_cost
           lamb /= lamb_factor
          
           if (abs(new_cost - cost)/cost) < conv_thresh:
@@ -84,5 +96,6 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=2, ma
           if lamb > max_lamb:
             break
 
-        cost = new_cost
+    return controls
+
 
