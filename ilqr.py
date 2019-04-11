@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from inv_pend_utils import *
+from constrained_control_opt import *
 
 ###########################
 # Utility functions
@@ -83,7 +84,7 @@ def backward_pass(env, lamb, alpha, states, controls):
     new_controls = compute_controls(env, alpha, states, controls, k_vec, K_vec)
     return new_controls
 
-def compute_controls(env, alpha, states, controls, k_vec, K_vec):
+def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_lower=-2, control_limit_upper=2):
     """
     Do forward pass to compute controls, then return computed controls.
     """
@@ -94,6 +95,7 @@ def compute_controls(env, alpha, states, controls, k_vec, K_vec):
     new_controls = np.zeros_like(controls)
 
     for i in range(len(controls)):
+        # TODO : Use constrained_control_opt instead to compute constrained controls
         new_controls[i] = controls[i] + (alpha * k_vec[i]) + np.dot(K_vec[i], new_states[i] - states[i])
         obs, _, _, _ = env.step(np.array([new_controls[i]]))
         new_states.append(get_state(obs))

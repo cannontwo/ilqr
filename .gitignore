@@ -1,2 +1,5 @@
 **.pyc
 **/pycache/**
+**ipopt
+**coin-license.txt
+**.swp
