@@ -74,7 +74,7 @@ def Q_d_control_d_state(theta, theta_dot, v_xx_prime):
     """
     return cost_hess_control_state() + np.dot(dynamics_d_control().T, np.dot(v_xx_prime, dynamics_d_state(theta, theta_dot)))
 
-def Q_d_control_d_control(theta, theta_dot, v_xx_prime):
+def Q_d_control_d_control(v_xx_prime):
     """
     Return Q_uu.
     """

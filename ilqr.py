@@ -28,6 +28,11 @@ def invert_mat(mat, lamb):
 
     return inv
 
+def near(a, b):
+    if abs(a - b) < 0.001:
+        return True
+    return False
+
 ###########################
 # iLQR Functions
 ###########################
@@ -53,7 +58,7 @@ def forward_pass(env, start_state, controls, render=False):
 
     return (cost, states)
 
-def backward_pass(env, lamb, alpha, states, controls):
+def backward_pass(env, lamb, alpha, states, controls, control_limit_lower=-2, control_limit_upper=2):
     """
     Run the iLQR backward pass, using perfect information about dynamics and
     cost derivatives.
@@ -69,10 +74,23 @@ def backward_pass(env, lamb, alpha, states, controls):
     V_xx[-1] = np.zeros((2, 2))
 
     for i in range(len(states) - 2, -1, -1):
-        Q_uu = Q_d_control_d_control(states[i][0], states[i][1], V_xx[i+1])
+        Q_uu = Q_d_control_d_control(V_xx[i+1])
         inv_Q_uu = invert_mat(Q_uu, lamb)
-        k = -1. * np.dot(inv_Q_uu, Q_d_control(controls[i], V_x[i+1]))
-        K = -1. * np.dot(inv_Q_uu, Q_d_control_d_state(states[i][0], states[i][1], V_xx[i+1]))
+
+        # Unconstrained case
+        #k = -1. * np.dot(inv_Q_uu, Q_d_control(controls[i], V_x[i+1]))
+        #K = -1. * np.dot(inv_Q_uu, Q_d_control_d_state(states[i][0], states[i][1], V_xx[i+1]))
+
+        k = one_dim_box_QP_opt(Q_uu[0][0], Q_d_control(controls[i], V_x[i+1])[0][0], control_limit_lower, control_limit_upper, controls[i])
+        k = np.array(k).reshape((1, 1))
+
+        # Since there's only one row in K, we just check if clamping is applied or not.
+        if near(k + controls[i], control_limit_lower) or near(k + controls[i], control_limit_upper):
+            K = np.zeros((1, 2))
+        else:
+            K = -1. * np.dot(inv_Q_uu, Q_d_control_d_state(states[i][0], states[i][1], V_xx[i+1]))
+
+        # TODO : Use constrained_control_opt instead to compute constrained controls
 
         k_vec[i] = k
         K_vec[i] = K
@@ -84,7 +102,7 @@ def backward_pass(env, lamb, alpha, states, controls):
     new_controls = compute_controls(env, alpha, states, controls, k_vec, K_vec)
     return new_controls
 
-def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_lower=-2, control_limit_upper=2):
+def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_lower=-2., control_limit_upper=2.):
     """
     Do forward pass to compute controls, then return computed controls.
     """
@@ -95,8 +113,8 @@ def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_l
     new_controls = np.zeros_like(controls)
 
     for i in range(len(controls)):
-        # TODO : Use constrained_control_opt instead to compute constrained controls
-        new_controls[i] = controls[i] + (alpha * k_vec[i]) + np.dot(K_vec[i], new_states[i] - states[i])
+        new_controls[i] = controls[i] + (alpha * k_vec[i] + np.dot(K_vec[i], new_states[i] - states[i]))
+        new_controls[i] = min(control_limit_upper, max(control_limit_lower, new_controls[i]))
         obs, _, _, _ = env.step(np.array([new_controls[i]]))
         new_states.append(get_state(obs))
 
@@ -113,8 +131,6 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=1.5, 
     controls = np.zeros((num_controls,))
     
     costs = []
-
-    # TODO : Initialize V_x and V_xx
 
     env = gym.make('Pendulum-v0')
 
@@ -135,7 +151,7 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=1.5, 
         if new_cost < cost:
           controls = new_controls
           lamb /= lamb_factor
-          #alpha /= alpha_factor
+          alpha *= alpha_factor
          
           if (abs(new_cost - cost)/cost) < conv_thresh:
             print("Convergence metric is {}".format(abs(new_cost - cost)/cost))
@@ -146,7 +162,7 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=1.5, 
           costs.append(cost)
         else:
           lamb *= lamb_factor
-          #alpha *= alpha_factor
+          alpha /= alpha_factor
           if lamb > max_lamb:
             break
 
