@@ -36,7 +36,7 @@ def cost_hess_state_state():
     Return an approximation of l_xx.
     """
     return np.array([[2, 0],
-                     [0, 0.02]])
+                     [0, 0.2]])
 
 def cost_hess_control_state():
     """
@@ -48,7 +48,7 @@ def cost_hess_control_control():
     """
     Return an approximation of l_uu.
     """
-    return np.array([[0.000002]])
+    return np.array([[0.002]])
 
 def Q_d_state(theta, theta_dot, v_x_prime):
     """

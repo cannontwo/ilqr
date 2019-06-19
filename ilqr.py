@@ -97,6 +97,7 @@ def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_l
     for i in range(len(controls)):
         # TODO : Use constrained_control_opt instead to compute constrained controls
         new_controls[i] = controls[i] + (alpha * k_vec[i]) + np.dot(K_vec[i], new_states[i] - states[i])
+        new_controls[i] = max(-2., min(2., new_controls[i]))
         obs, _, _, _ = env.step(np.array([new_controls[i]]))
         new_states.append(get_state(obs))
 
@@ -135,7 +136,7 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=1.5, 
         if new_cost < cost:
           controls = new_controls
           lamb /= lamb_factor
-          #alpha /= alpha_factor
+          alpha *= alpha_factor
          
           if (abs(new_cost - cost)/cost) < conv_thresh:
             print("Convergence metric is {}".format(abs(new_cost - cost)/cost))
@@ -146,7 +147,7 @@ def run_inv_pend_ilqr(start_state, num_controls, max_iter=100, lamb_factor=1.5, 
           costs.append(cost)
         else:
           lamb *= lamb_factor
-          #alpha *= alpha_factor
+          alpha /= alpha_factor
           if lamb > max_lamb:
             break
 
