@@ -14,7 +14,7 @@ def get_state(s):
     """
     Given the OpenAI Gym pendulum state [cos(theta), sin(theta), \dot{theta}], return [theta, \dot{theta}].
     """
-    return np.array([math.atan2(s[1], s[0]), s[2]])
+    return s
 
 def invert_mat(mat, lamb):
     """
@@ -37,12 +37,12 @@ def forward_pass(env, start_state, controls, render=False):
     Run the iLQR forward pass, using OpenAI Gym as simulator.
     """
     env.reset()
-    env.unwrapped.state = np.array(start_state)
+    env.unwrapped.state = np.array([np.arctan2(start_state[1], start_state[0]), start_state[2]])
+    #env.unwrapped.state = np.array(start_state)
     cost = 0.0
     states = [start_state]
 
     for control in controls:
-        #print("Applying control {}".format(control))
         obs, reward, _, _ = env.step(np.array([control]))
         
         if render:
@@ -59,27 +59,27 @@ def backward_pass(env, lamb, alpha, states, controls):
     cost derivatives.
     """
     V = np.zeros((len(states),))
-    V_x = np.zeros((len(states), 2, 1))
-    V_xx = np.zeros((len(states), 2, 2))
+    V_x = np.zeros((len(states), 3, 1))
+    V_xx = np.zeros((len(states), 3, 3))
     k_vec = np.zeros((len(controls), 1))
-    K_vec = np.zeros((len(controls), 1, 2))
+    K_vec = np.zeros((len(controls), 1, 3))
 
     V[-1] = 0.0
-    V_x[-1] = np.zeros((2, 1))
-    V_xx[-1] = np.zeros((2, 2))
+    V_x[-1] = np.zeros((3, 1))
+    V_xx[-1] = np.zeros((3, 3))
 
     for i in range(len(states) - 2, -1, -1):
-        Q_uu = Q_d_control_d_control(states[i][0], states[i][1], V_xx[i+1])
+        Q_uu = Q_d_control_d_control(states[i][0], states[i][1], states[i][2], V_xx[i+1])
         inv_Q_uu = invert_mat(Q_uu, lamb)
         k = -1. * np.dot(inv_Q_uu, Q_d_control(controls[i], V_x[i+1]))
-        K = -1. * np.dot(inv_Q_uu, Q_d_control_d_state(states[i][0], states[i][1], V_xx[i+1]))
+        K = -1. * np.dot(inv_Q_uu, Q_d_control_d_state(states[i][0], states[i][1], states[i][2], V_xx[i+1]))
 
         k_vec[i] = k
         K_vec[i] = K
 
         V[i] = (-1./2.) * np.dot(k.T, np.dot(Q_uu, k))
-        V_x[i] = Q_d_state(states[i][0], states[i][1], V_x[i+1]) - np.dot(K.T, np.dot(Q_uu, k))
-        V_xx[i] = Q_d_state_d_state(states[i][0], states[i][1], V_xx[i+1]) - np.dot(K.T, np.dot(Q_uu, K))
+        V_x[i] = Q_d_state(states[i][0], states[i][1], states[i][2], V_x[i+1]) - np.dot(K.T, np.dot(Q_uu, k))
+        V_xx[i] = Q_d_state_d_state(states[i][0], states[i][1], states[i][2], V_xx[i+1]) - np.dot(K.T, np.dot(Q_uu, K))
 
     new_controls = compute_controls(env, alpha, states, controls, k_vec, K_vec)
     return new_controls
@@ -90,7 +90,7 @@ def compute_controls(env, alpha, states, controls, k_vec, K_vec, control_limit_l
     """
     # TODO : Combine with other forward pass to save time.
     env.reset()
-    env.unwrapped.state = np.array(states[0])
+    env.unwrapped.state = np.array([np.arctan2(states[0][1], states[0][0]), states[0][2]])
     new_states = [states[0]]
     new_controls = np.zeros_like(controls)
 

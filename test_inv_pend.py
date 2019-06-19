@@ -21,6 +21,7 @@ for ep in range(num_eps):
     for step in range(num_steps):
         #))
         obs, _, _, _ = env.step(env.action_space.sample())
+        print("\tSample action is {}".format(env.action_space.sample()))
         print("\tState is {}".format(get_state(obs)))
 
         env.render()

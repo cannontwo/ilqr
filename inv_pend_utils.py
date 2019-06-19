@@ -1,12 +1,14 @@
 import numpy as np
 
-def dynamics_d_state(theta, theta_dot):
+def dynamics_d_state(x, y, theta_dot):
     """
     Return the jacobian of the dynamics with respect to the state vector;
     f_x in the parlance of the iLQR equations.
     """
-    return np.array([[1., 0.05],
-                     [(30./2.) * np.cos(theta + np.pi) * 0.05, 1.]])
+    delta = 0.05
+    return np.array([[(-y * np.cos(np.arctan2(y, x) + (delta * theta_dot)))/(x**2 + y**2), (x * np.cos(np.arctan2(y, x) + (delta * theta_dot)))/(x**2 + y**2), delta * np.cos(np.arctan2(y, x) + (delta * theta_dot))],
+                     [ (y * np.sin(np.arctan2(y, x) + (delta * theta_dot)))/(x**2 + y**2), (-x * np.sin(np.arctan2(y, x) + (delta * theta_dot)))/(x**2 + y**2), -delta * np.sin(np.arctan2(y, x) + (delta * theta_dot))],
+                     [(30.0 * delta) / 2, 0, 1]])
 
 def dynamics_d_control():
     """
@@ -14,14 +16,16 @@ def dynamics_d_control():
     f_u in the parlance of the iLQR equations.
     """
     return np.array([[0],
+                     [0],
                      [(3. * 0.05)]])
 
-def cost_grad_state(theta, theta_dot):
+def cost_grad_state(x, y, theta_dot):
     """
     Return the gradient of the cost (negative reward) with respect to the state vector;
     l_x in the parlance of the iLQR equations.
     """
-    return np.array([[2 * theta],
+    return np.array([[2 * np.arctan2(y, x) * (-y / (x**2 + y**2))],
+                     [2 * np.arctan2(y, x) * (x / (x**2 + y**2))],
                      [0.2 * theta_dot]])
 
 def cost_grad_control(u):
@@ -31,30 +35,41 @@ def cost_grad_control(u):
     """
     return np.array([0.002 * u])    
 
-def cost_hess_state_state():
+# Helper functions for approximating cost hessians
+def r_x(x, y):
+    return np.array([[-y / (x**2 + y**2), x / (x**2 + y**2), 0.0],
+                     [0.0, 0.0, 0.316],
+                     [0.0, 0.0, 0.0]])
+
+
+def r_u():
+    return np.array([[0.0],
+                     [0.0],
+                     [0.0316]])
+
+def cost_hess_state_state(x, y):
     """
     Return an approximation of l_xx.
     """
-    return np.array([[2, 0],
-                     [0, 0.2]])
+    return 2 * np.dot(np.transpose(r_x(x, y)), r_x(x, y))
 
-def cost_hess_control_state():
+def cost_hess_control_state(x, y):
     """
     Return an approximation of l_ux.
     """
-    return np.array([[0, 0]])
+    return 2 * np.dot(np.transpose(r_u()), r_x(x, y))
 
 def cost_hess_control_control():
     """
     Return an approximation of l_uu.
     """
-    return np.array([[0.002]])
+    return 2 * np.dot(np.transpose(r_u()), r_u())
 
-def Q_d_state(theta, theta_dot, v_x_prime):
+def Q_d_state(x, y, theta_dot, v_x_prime):
     """
     Return Q_x.
     """
-    return cost_grad_state(theta, theta_dot) + np.dot(dynamics_d_state(theta, theta_dot).T, v_x_prime)
+    return cost_grad_state(x, y, theta_dot) + np.dot(dynamics_d_state(x, y, theta_dot).T, v_x_prime)
 
 def Q_d_control(u, v_x_prime):
     """
@@ -62,19 +77,19 @@ def Q_d_control(u, v_x_prime):
     """
     return cost_grad_control(u) + np.dot(dynamics_d_control().T, v_x_prime)
 
-def Q_d_state_d_state(theta, theta_dot, v_xx_prime):
+def Q_d_state_d_state(x, y, theta_dot, v_xx_prime):
     """
     Return Q_xx.
     """
-    return cost_hess_state_state() + np.dot(dynamics_d_state(theta, theta_dot).T, np.dot(v_xx_prime, dynamics_d_state(theta, theta_dot)))
+    return cost_hess_state_state(x, y) + np.dot(dynamics_d_state(x, y, theta_dot).T, np.dot(v_xx_prime, dynamics_d_state(x, y, theta_dot)))
 
-def Q_d_control_d_state(theta, theta_dot, v_xx_prime):
+def Q_d_control_d_state(x, y, theta_dot, v_xx_prime):
     """
     Return Q_ux.
     """
-    return cost_hess_control_state() + np.dot(dynamics_d_control().T, np.dot(v_xx_prime, dynamics_d_state(theta, theta_dot)))
+    return cost_hess_control_state(x, y) + np.dot(dynamics_d_control().T, np.dot(v_xx_prime, dynamics_d_state(x, y, theta_dot)))
 
-def Q_d_control_d_control(theta, theta_dot, v_xx_prime):
+def Q_d_control_d_control(x, y, theta_dot, v_xx_prime):
     """
     Return Q_uu.
     """
